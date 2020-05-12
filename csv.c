@@ -259,8 +259,8 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 	(void) qte, (void) esc;		/* prevent gcc unused-var warning */
 	
 	const char delim = cp->delim;
-	const char* p = buf;
-	const char* const q = p + bufsz;
+	const char* ppp = buf;
+	const char* const q = ppp + bufsz;
 	
 
 	int	   cno = 0;				/* start at field 0 */
@@ -270,72 +270,72 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 	int quoted;
 	const char* escptr;
 	scan_t* scan = &cp->scan;
-	scan_reset(scan, p, q);
+	scan_reset(scan, ppp, q);
 	
 	START_VAL: {
 		if (unlikely(cno >= cp->fldmax)) {
 			if (expand(cp)) {
 				return reterr(cp, CSV_EOUTOFMEMORY, "out of memory",
-							  cno, nline, p - buf);
+							  cno, nline, ppp - buf);
 			}
 			assert(cno < cp->fldmax);
 		}
 
 		/* field starts here */
 		fld = (const char**) &cp->fld[cno];
-		*fld = p;
+		*fld = ppp;
 		escptr = 0;
 
-		// point p at next special char
-		if (0 == (p = scan_next(scan)))
+		// point ppp at next special char
+		if (0 == (ppp = scan_next(scan)))
 			return 0;
 
-		// quoted when p is at the first char and it is a qte
-		quoted = (p == *fld && *p == qte);
+		// quoted when ppp is at the first char and it is a qte
+		quoted = (ppp == *fld && *ppp == qte);
 
 		// a value can be either quoted or unquoted
 		if (unlikely(quoted)) {
 			goto QUOTED_VAL;
 		} else {
-			// p is at a delim or CR or LF
+			// ppp is at a delim or CR or LF
 			goto FINISH;
 		}
 	}
 	
 	QUOTED_VAL: {
-		if (0 == (p = scan_next(scan)))		/* next special char */
+		if (0 == (ppp = scan_next(scan)))		/* next special char */
 			return 0;
 		
-		const int cur = *p;
+		const int cur = *ppp;
 		if (cur == qte) {
 			const char* xp;
 			if (0 == (xp = scan_next(scan)))
 				return 0;
 			
 			// expect a special char after qte
-			if (unlikely(xp != p + 1)) {
-				return reterr(cp, CSV_EQUOTE, "bad value after quote", cno, nline, p - buf);
+			if (unlikely(xp != ppp + 1)) {
+				return reterr(cp, CSV_EQUOTE, "bad value after quote", cno, nline, ppp - buf);
 			}
 			// handle qte qte
 			if (esc == qte) {
 				if (*xp == qte) {
-					escptr = escptr ? escptr : p;
+					escptr = escptr ? escptr : ppp;
 					goto QUOTED_VAL;
 				}
 			}
-			p = xp;
+			ppp = xp;
 			goto FINISH;
 		}
 
 		if (cur == esc) {
 			assert( esc != qte);
-			escptr = escptr ? escptr : p;
-			p += 2;				/* skip 2 chars */
-			if (p >= q)
+			escptr = escptr ? escptr : ppp;
+			ppp += 2;				/* skip 2 chars */
+			if (ppp >= q)
 				return 0;
 
 			// reset the scan to restart at p
-			scan_reset(scan, p, q);
+			scan_reset(scan, ppp, q);
 			goto QUOTED_VAL;
 		}
 
@@ -347,7 +347,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 
 	FINISH: {
 		/* fin the field */
-		cp->len[cno] = p - *fld;
+		cp->len[cno] = ppp - *fld;
 		cp->escptr[cno] = (char*) escptr;
 
 		if (quoted) {
@@ -359,7 +359,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		cno++;
 
 		// eat the cur char
-		const int cur = *p++;
+		const int cur = *ppp++;
 
 		/* the field is done? */
 		if (likely(cur == delim)) {
@@ -374,18 +374,18 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 			goto FINROW;
 		case '\r':
 			// next char is LF? 
-			if (p < q && *p == '\n') {
-				p++;			/* eat LF */
+			if (ppp < q && *ppp == '\n') {
+				ppp++;			/* eat LF */
 				goto FINROW;
 			}
 		}
 		return reterr(cp, CSV_ECRLF, "CRLF expected",
-					  cno, nline, p - buf);
+					  cno, nline, ppp - buf);
 	}
 
 
 	FINROW: {
-		int rowsz = p - buf;
+		int rowsz = ppp - buf;
 		nline++;
 		cp->state.linenum += nline;
 		cp->state.rownum++;
