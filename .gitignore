@@ -1,3 +1,8 @@
+/csv2py
+/csvnorm
+/csvsplit
+/csvstat
+
 # Prerequisites
 *.d
 
