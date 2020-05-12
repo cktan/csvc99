@@ -346,6 +346,8 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 	}
 
 	FINISH: {
+		/* ppp is pointing at [delim, \r, \n] */
+		
 		/* fin the field */
 		cp->len[cno] = ppp - *fld;
 		cp->escptr[cno] = (char*) escptr;
