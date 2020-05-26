@@ -1,3 +1,3 @@
 # csvc99
 
-CSV Parser in C with SIMD acceleration.
+Very fast CSV Parser in C. It searches for special chars using SSE instructions.
