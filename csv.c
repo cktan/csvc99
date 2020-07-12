@@ -59,7 +59,7 @@ struct csv_parse_t {
 		int64_t efldnum;
 	} state;
 
-	/* SIMD vectors during parsing */
+	/* SIMD vector for parsing quoted field */
 	__m128i scan_escaped_string; /* qte, esc */
 	
 	scan_t scan;
@@ -182,9 +182,11 @@ static void touchup(csv_parse_t* cp)
 		*q = 0; /* NUL term */
 		
 		if (!escptr) {
-			// check if it is null
+			// simple case: no escape chars.
+			// check for null
 			if (q - p == cp->nullstrsz && 0 == memcmp(p, cp->nullstr, q - p))
 				*fld = 0;
+			// done with this field
 			continue;
 		} 
 
@@ -227,15 +229,11 @@ static void touchup(csv_parse_t* cp)
 			
 			/* found a qte or esc. */
 			/* copy head in p, skip the esc char, add the escaped char. */
-			
-			/* copy head in p */
-			for ( ; m; m--) *s++ = *p++;
-
-			/* now, p must be (esc, X) */
-			assert(*p == esc);
-			
-			p++;		 /* skip the esc char */
-			*s++ = *p++; /* copy the escaped char */
+			memmove(s, p, m);
+			s += m, p += m;
+			assert(*p == esc); /* now, p must be (esc, X) */
+			p++;			   /* skip the esc char */
+			*s++ = *p++;	   /* copy the escaped char */
 		}
 		
 		*s = 0;				/* NUL term */
@@ -371,15 +369,8 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		/* the row is done! */
 
 		cp->fldtop = cno;
-		switch (cur) {
-		case '\n':
+		if (cur == '\n' || (cur == '\r' && ppp < q && *ppp == '\n' && ppp++)) {
 			goto FINROW;
-		case '\r':
-			// next char is LF? 
-			if (ppp < q && *ppp == '\n') {
-				ppp++;			/* eat LF */
-				goto FINROW;
-			}
 		}
 		return reterr(cp, CSV_ECRLF, "CRLF expected",
 					  cno, nline, ppp - buf);
@@ -467,11 +458,13 @@ csv_parse_t* csv_open(int qte,
 					  int delim,
 					  const char nullstr[20])
 {
+	/* default values */
 	qte = qte ? qte : '"';
 	esc = esc ? esc : qte;
 	delim = delim ? delim : ',';
 	nullstr = nullstr ? nullstr : "";
-	
+
+	/* alloc parse struct and init it */
 	csv_parse_t* cp;
 	if (! (cp = calloc(1, sizeof(csv_parse_t)))) {
 		return 0;
@@ -484,11 +477,13 @@ csv_parse_t* csv_open(int qte,
 	cp->esc = esc;
 	cp->delim = delim;
 
-	__v16qi v3 = { qte, esc };
-	cp->scan_escaped_string = (__m128i) v3;
+	/* match while inside a quoted string field */
+	__v16qi v2 = { qte, esc };
+	cp->scan_escaped_string = (__m128i) v2;
 
-	__v16qi v4 = { qte, esc, delim, '\r', '\n' };
-	cp->scan.match = (__m128i) v4;
+	/* match while outside a quoted string field */
+	__v16qi v5 = { qte, esc, delim, '\r', '\n' };
+	cp->scan.match = (__m128i) v5;
 	cp->scan.matchlen = 5;
 	
 	return cp;
