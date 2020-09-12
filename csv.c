@@ -332,7 +332,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 			if (ppp >= q)
 				return 0;
 
-			// reset the scan to restart at p
+			// reset the scan to start at ppp
 			scan_reset(scan, ppp, q);
 			goto QUOTED_VAL;
 		}
@@ -425,12 +425,8 @@ int csv_feed_last(csv_parse_t* const cp,
 	*ret_field = 0;
 	*ret_nfield = 0;
 	
-	if (bufsz < 0)
-		return reterr(cp, CSV_EPARAM, "bad bufsz", 0, 0, 0);
-
-	/* empty file case -- do not add a new NULL record */
-	if (bufsz == 0)
-		return 0;
+	if (bufsz <= 0) 
+		return bufsz == 0 ? 0 : reterr(cp, CSV_EPARAM, "bad bufsz", 0, 0, 0);
 	
 	/* handle the case where last row is missing \n */
 	int appended = 0;
