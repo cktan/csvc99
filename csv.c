@@ -289,12 +289,21 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 			return 0;
 
 		// quoted when ppp is at the first char and it is a qte
-		quoted = (ppp == *fld && *ppp == qte);
+		int ch = *ppp;
+		quoted = (ppp == *fld && ch == qte);
 
 		// a value can be either quoted or unquoted
 		if (unlikely(quoted)) {
 			goto QUOTED_VAL;
 		} else {
+			// We are either inside an UNQUOTED VAL or at end of a field
+			// ch could be qte, esc, delim, \r or \n
+			// skip until we are at end of a field
+			while (ch == qte || ch == esc) {
+				if (0 == (ppp = scan_next(scan)))
+					return 0;
+				ch = *ppp;
+			}
 			// ppp is at a delim or CR or LF
 			goto FINISH;
 		}
