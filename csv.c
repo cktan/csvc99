@@ -12,9 +12,8 @@
 */
 
 #define _XOPEN_SOURCE 700
-//#include <emmintrin.h>
 #include "csv.h"
-#include <smmintrin.h>
+#include <x86intrin.h>
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -48,9 +47,9 @@ struct csv_parse_t {
 	struct {
 		int64_t linenum;
 		int64_t charnum;
-		int64_t rownum; 
+		int64_t rownum;
 		int64_t fldnum;
-		
+
 		int     errnum;
 		const char* errmsg;
 		int64_t elinenum;
@@ -61,7 +60,7 @@ struct csv_parse_t {
 
 	/* SIMD vector for parsing quoted field */
 	__m128i scan_escaped_string; /* qte, esc */
-	
+
 	scan_t scan;
 };
 
@@ -87,12 +86,20 @@ static int __scan_forward(scan_t* sp)
 {
 	const char* base = sp->base;
 	const char* const q = sp->q;
+	char tmpbuf[16];
 	while (0 == sp->bmap) {
 		base += 16;
-		if (base >= q) {
-			return -1;
+		const char* p = base;
+		const int plen = q - base;
+		if (unlikely(plen < 16)) {
+			if (unlikely(plen <= 0)) return -1;
+			// We will load 16-byte in fillbmap. If there is
+			// less than 16-byte in base, copy into tmpbuf
+			// and read from tmpbuf.
+			memcpy(tmpbuf, p, plen);
+			p = tmpbuf;
 		}
-		sp->bmap = fillbmap(base, q - base, sp->match, sp->matchlen);
+		sp->bmap = fillbmap(p, plen, sp->match, sp->matchlen);
 	}
 	sp->base = base;
 	return 0;
@@ -117,22 +124,22 @@ static int expand(csv_parse_t* cp)
 {
 	void* xp;
 	int max = cp->fldmax + 64;
-	
+
 	if (! (xp = realloc(cp->fld, sizeof(*cp->fld) * max))) {
 		return -1;
 	}
 	cp->fld = xp;
-	
+
 	if (! (xp = realloc(cp->escptr, sizeof(*cp->escptr) * max))) {
 		return -1;
 	}
 	cp->escptr = xp;
-	
+
 	if (! (xp = realloc(cp->len, sizeof(*cp->len) * max))) {
 		return -1;
 	}
 	cp->len = xp;
-	
+
 	cp->fldmax = max;
 	return 0;
 }
@@ -180,7 +187,7 @@ static void touchup(csv_parse_t* cp)
 		char* q = p + cp->len[i];
 
 		*q = 0; /* NUL term */
-		
+
 		if (!escptr) {
 			// simple case: no escape chars.
 			// check for null
@@ -188,7 +195,7 @@ static void touchup(csv_parse_t* cp)
 				*fld = 0;
 			// done with this field
 			continue;
-		} 
+		}
 
 		/*
 		 * IN A QUOTED FIELD. Squeeze out the escape chars.
@@ -198,35 +205,35 @@ static void touchup(csv_parse_t* cp)
 		assert(p <= escptr && escptr < q);
 		char* s = p = escptr;
 		assert(*p == esc);
-		
+
 		p++;					/* skip the esc char */
 		*s++ = *p++;			/* copy the escaped char */
 
 		// scan forward and squeeze.
 		while (p < q) {
 			__m128i reg = _mm_loadu_si128((__m128i*) p);
-			
+
 			/* QUOTED: only look for [esc,qte]. */
 			int m = _mm_cmpestri(cp->scan_escaped_string, 2,
 								 reg, q-p,
 								 _SIDD_CMP_EQUAL_ANY);
-			
+
 			if (m == 16) {
 				/* not found */
-				
+
 				if (p + 16 < q) {
 					/* copy 16 bytes into s and continue */
 					_mm_storeu_si128((__m128i*)s, reg);
 					s+= 16, p += 16;
 					continue;
 				}
-				
+
 				/* less than 16 bytes remaining. copy the rest and break out */
 				while (*p) *s++ = *p++;
 				assert(p == q);
 				break;
 			}
-			
+
 			/* found a qte or esc. */
 			/* copy head in p, skip the esc char, add the escaped char. */
 			memmove(s, p, m);
@@ -235,7 +242,7 @@ static void touchup(csv_parse_t* cp)
 			p++;			   /* skip the esc char */
 			*s++ = *p++;	   /* copy the escaped char */
 		}
-		
+
 		*s = 0;				/* NUL term */
 	}
 }
@@ -246,8 +253,8 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 {
 	/*
 	 * NOTE: this routine MUST NOT modify buf[]; it should only index
-	 * fld[] into buf[].  When it succeeded, then buf[] can be modified 
-	 * later via a call to touchup(). 
+	 * fld[] into buf[].  When it succeeded, then buf[] can be modified
+	 * later via a call to touchup().
 	 */
 	if (unlikely(!buf || bufsz <= 0)) {
 		return bufsz == 0 ? 0 : reterr(cp, CSV_EPARAM, "bad bufsz", 0, 0, 0);
@@ -255,11 +262,11 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 	const char qte = cp->qte;
 	const char esc = cp->esc;
 	(void) qte, (void) esc;		/* prevent gcc unused-var warning */
-	
+
 	const char delim = cp->delim;
 	const char* ppp = buf;
 	const char* const q = ppp + bufsz;
-	
+
 
 	int	   cno = 0;				/* start at field 0 */
 	int	   nline = 0;			/* count num lines */
@@ -269,7 +276,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 	const char* escptr;
 	scan_t* scan = &cp->scan;
 	scan_reset(scan, ppp, q);
-	
+
 	START_VAL: {
 		if (unlikely(cno >= cp->fldmax)) {
 			if (expand(cp)) {
@@ -308,17 +315,17 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 			goto FINISH;
 		}
 	}
-	
+
 	QUOTED_VAL: {
 		if (0 == (ppp = scan_next(scan)))		/* next special char */
 			return 0;
-		
+
 		const int cur = *ppp;
 		if (cur == qte) {
 			const char* xp;
 			if (0 == (xp = scan_next(scan)))
 				return 0;
-			
+
 			// expect a special char after qte
 			if (unlikely(xp != ppp + 1)) {
 				return reterr(cp, CSV_EQUOTE, "bad value after quote", cno, nline, ppp - buf);
@@ -354,7 +361,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 
 	FINISH: {
 		/* ppp is pointing at [delim, \r, \n] */
-		
+
 		/* fin the field */
 		cp->len[cno] = ppp - *fld;
 		cp->escptr[cno] = (char*) escptr;
@@ -364,7 +371,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 			cp->fld[cno] += 1;
 			cp->len[cno] -= 2;
 		}
-		
+
 		cno++;
 
 		// eat the cur char
@@ -392,13 +399,13 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		cp->state.linenum += nline;
 		cp->state.rownum++;
 		cp->state.charnum += rowsz;
-		
+
 		return rowsz;
 	}
 }
 
 
-	
+
 int csv_feed(csv_parse_t* const cp,
 			 char*   buf,
 			 int	 bufsz,
@@ -407,7 +414,7 @@ int csv_feed(csv_parse_t* const cp,
 {
 	*ret_field = 0;
 	*ret_nfield = 0;
-	
+
 	int rowsz = csv_line(cp, buf, bufsz);
 	if (rowsz <= 0) {
 		// insufficient chars in buf for a row
@@ -420,12 +427,12 @@ int csv_feed(csv_parse_t* const cp,
 
 	// go back to fix up fields with escaped chars
 	touchup(cp);
-	
+
 	return rowsz;
 }
 
 
-int csv_feed_last(csv_parse_t* const cp, 
+int csv_feed_last(csv_parse_t* const cp,
 				  char*   buf,
 				  int	  bufsz,
 				  char*** ret_field,
@@ -433,10 +440,10 @@ int csv_feed_last(csv_parse_t* const cp,
 {
 	*ret_field = 0;
 	*ret_nfield = 0;
-	
-	if (bufsz <= 0) 
+
+	if (bufsz <= 0)
 		return bufsz == 0 ? 0 : reterr(cp, CSV_EPARAM, "bad bufsz", 0, 0, 0);
-	
+
 	/* handle the case where last row is missing \n */
 	int appended = 0;
 	if (buf[bufsz-1] != '\n') {
@@ -452,7 +459,7 @@ int csv_feed_last(csv_parse_t* const cp,
 		bufsz++;
 		appended = 1;
 	}
-	
+
 	int n = csv_feed(cp, buf, bufsz, ret_field, ret_nfield);
 	return (n > 0 && appended) ? n - 1 : n;
 }
@@ -477,7 +484,7 @@ csv_parse_t* csv_open(int qte,
 	strncpy(cp->nullstr, nullstr, sizeof(cp->nullstr));
 	cp->nullstr[sizeof(cp->nullstr)-1] = 0;
 	cp->nullstrsz = strlen(cp->nullstr);
-	
+
 	cp->qte = qte;
 	cp->esc = esc;
 	cp->delim = delim;
@@ -490,7 +497,7 @@ csv_parse_t* csv_open(int qte,
 	__v16qi v5 = { qte, esc, delim, '\r', '\n' };
 	cp->scan.match = (__m128i) v5;
 	cp->scan.matchlen = 5;
-	
+
 	return cp;
 }
 
@@ -550,7 +557,7 @@ int csv_scan(intptr_t handle,
 		on_error(handle, CSV_EOUTOFMEMORY, "csv_open failed", 0);
 		goto bail;
 	}
-	
+
 
 	// keep filling up buf[] and feeding csv until eof
 	while (!eof) {
@@ -583,7 +590,7 @@ int csv_scan(intptr_t handle,
 		nb = on_bufempty(handle, q, bufsz - (q-p));
 		if (nb < 0)
 			goto bail;
-		
+
 		eof |= (nb == 0);
 		q   += nb;
 

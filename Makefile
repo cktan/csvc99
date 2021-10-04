@@ -1,4 +1,4 @@
-CC = gcc 
+CC = gcc
 CFILES = csv.c
 EXEC = csv2py csvsplit csvnorm csvstat
 
@@ -9,7 +9,7 @@ CFLAGS += -std=c99 -Wall -Wextra -mavx
 ifdef DEBUG
     CFLAGS += -O0 -g
 else
-    # NOTE: on gcc 6, csvstat produced by -O2 runs faster than -O3 
+    # NOTE: on gcc 6, csvstat produced by -O2 runs faster than -O3
     CFLAGS += -O2 -DNDEBUG
 endif
 
