@@ -175,6 +175,8 @@ static void xfree(const void* s)
  */
 static void touchup(csv_parse_t* cp)
 {
+	const char* const nullstr = cp->nullstr;
+	const int nullstrsz = cp->nullstrsz;
 	const char esc = cp->esc;
 	const char qte = cp->qte;
 	(void) esc; (void) qte; /* prevent unused var warning */
@@ -191,8 +193,9 @@ static void touchup(csv_parse_t* cp)
 		if (!escptr) {
 			// simple case: no escape chars.
 			// check for null
-			if (q - p == cp->nullstrsz && 0 == memcmp(p, cp->nullstr, q - p))
-				*fld = 0;
+			if (q - p == nullstrsz && 0 == memcmp(p, nullstr, q - p)) {
+				*fld = 0;		/* make it a nullptr to indicate sql NULL field */
+			}
 			// done with this field
 			continue;
 		}
