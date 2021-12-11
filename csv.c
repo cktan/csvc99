@@ -225,12 +225,12 @@ static void touchup(csv_parse_t* cp)
 	/* process the fields one by one */
 	for (int i = 0; i < cp->fldtop; i++) {
 		char** const fld = &cp->fld[i];
-		char* const escptr = cp->escptr[i];
 		char* p = *fld;
 		char* q = p + cp->len[i];
 
 		*q = 0; /* NUL term */
 
+		char* const escptr = cp->escptr[i];
 		if (!escptr) {
 			// simple case: no escape chars.
 			// check for null
@@ -250,56 +250,16 @@ static void touchup(csv_parse_t* cp)
 		char* s = p = escptr;
 		assert(*p == esc);
 
-		p++;					/* skip the esc char */
+		p++;					/* skip the first esc char */
 		*s++ = *p++;			/* copy the escaped char */
 
-		// scan forward and squeeze.
+		// scan forward and squeeze out subsequent esc chars, if any
 		while (p < q) {
-
-
-#ifdef __ARM_NEON__
-
 			if (*p == qte || *p == esc) {
 				p++;			/* skip the special char */
 			}
 
 			*s++ = *p++;		/* copy the escaped char */
-
-#else
-			/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-			/* FIXME: possible buffer overrun */
-			/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
-			__m128i reg = _mm_loadu_si128((__m128i*) p);
-
-			/* QUOTED: only look for [esc,qte]. */
-			int m = _mm_cmpestri(cp->scan_escaped_string, 2,
-								 reg, q-p,
-								 _SIDD_CMP_EQUAL_ANY);
-
-			if (m == 16) {
-				/* not found */
-
-				if (p + 16 < q) {
-					/* copy 16 bytes into s and continue */
-					_mm_storeu_si128((__m128i*)s, reg);
-					s+= 16, p += 16;
-					continue;
-				}
-
-				/* less than 16 bytes remaining. copy the rest and break out */
-				while (*p) *s++ = *p++;
-				assert(p == q);
-				break;
-			}
-
-			/* found a qte or esc. */
-			/* copy head in p, skip the esc char, add the escaped char. */
-			memmove(s, p, m);
-			s += m, p += m;
-			assert(*p == esc || *p == qte); /* now, p must be (esc, X) */
-			p++;			   /* skip the esc char */
-			*s++ = *p++;	   /* copy the escaped char */
-#endif
 		}
 
 		*s = 0;				/* NUL term */
