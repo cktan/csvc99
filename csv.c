@@ -16,18 +16,25 @@
 #include <stdlib.h>
 #ifdef __ARM_NEON__
 #include <arm_neon.h>
-#define __m128i int32x4_t
-typedef char __v16qi __attribute__ ((vector_size (16)));
 
-static inline __m128i _mm_loadu_si128(const __m128i *p)
-{
-	return vld1q_s32((int32_t *)p);
-}
+typedef int32x4_t __m128i;
+typedef char __v16qi __attribute__ ((vector_size (16)));
 
 typedef union __attribute__((aligned(16))) __oword {
 	int32x4_t m128i;
 	uint8_t   u8[16];
 } __oword;
+
+static inline __m128i _mm_loadu_si128(const __m128i *p)
+{
+	__oword w;
+	if (((intptr_t)p) & 0xf) {
+		memcpy(&w.m128i, p, sizeof(*p));
+		p = &w.m128i;
+	}
+	return vld1q_s32((int32_t *)p);
+}
+
 
 static inline uint16_t SSE4_cmpestrm(int32x4_t S1, int L1, int32x4_t S2, int L2)
 {
@@ -315,8 +322,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 			return 0;
 
 		// quoted when ppp is at the first char and it is a qte
-		int ch = *ppp;
-		quoted = (ppp == *fld && ch == qte);
+		quoted = (ppp == *fld && *ppp == qte);
 
 		// a value can be either quoted or unquoted
 		if (unlikely(quoted)) {
@@ -324,11 +330,11 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		} else {
 			// We are either inside an UNQUOTED VAL or at end of a field
 			// ch could be qte, esc, delim, \r or \n
-			// skip until we are at end of a field
-			while (ch == qte || ch == esc) {
-				if (0 == (ppp = scan_next(scan)))
-					return 0;
-				ch = *ppp;
+			int ch = *ppp;
+			if (unlikely(ch == qte || ch == esc)) {
+				// qte or esc is not permitted in an unquoted field
+				return reterr(cp, CSV_EQUOTE, "unexpected qte or esc char in unquoted field",
+							  cno, nline, ppp - buf);
 			}
 			// ppp is at a delim or CR or LF
 			goto FINISH;
@@ -380,6 +386,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 
 	FINISH: {
 		/* ppp is pointing at [delim, \r, \n] */
+		assert(*ppp == delim || *ppp == '\r' || *ppp == '\n');
 
 		/* fin the field */
 		cp->len[cno] = ppp - *fld;
