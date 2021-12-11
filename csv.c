@@ -13,7 +13,44 @@
 
 #define _XOPEN_SOURCE 700
 #include "csv.h"
+#include <stdlib.h>
+#ifdef __ARM_NEON__
+#include <arm_neon.h>
+#define __m128i int32x4_t
+typedef char __v16qi __attribute__ ((vector_size (16)));
+
+static inline __m128i _mm_loadu_si128(const __m128i *p)
+{
+	return vld1q_s32((int32_t *)p);
+}
+
+typedef union __attribute__((aligned(16))) __oword {
+	int32x4_t m128i;
+	uint8_t   u8[16];
+} __oword;
+
+static inline uint16_t SSE4_cmpestrm(int32x4_t S1, int L1, int32x4_t S2, int L2)
+{
+    __oword s1, s2;
+    s1.m128i = S1;
+    s2.m128i = S2;
+    uint16_t result = 0;
+    uint16_t i = 0;
+    uint16_t j = 0;
+    for (i = 0; i < L2; i++) {
+        for (j = 0; j < L1; j++) {
+            if (s1.u8[j] == s2.u8[i]) {
+                result |= (1 << i);
+            }
+        }
+    }
+    return result;
+}
+
+
+#else
 #include <x86intrin.h>
+#endif
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -68,8 +105,12 @@ struct csv_parse_t {
 static inline uint16_t fillbmap(const char* const p, const int plen, const __m128i match, const int matchlen)
 {
 	__m128i pval = _mm_loadu_si128((const __m128i*) p);
+#ifdef __ARM_NEON__
+	return SSE4_cmpestrm(match, matchlen, pval, plen);
+#else
 	__m128i mask = _mm_cmpestrm(match, matchlen, pval, plen, _SIDD_CMP_EQUAL_ANY | _SIDD_UBYTE_OPS);
 	return _mm_extract_epi16(mask, 0);
+#endif
 }
 
 
@@ -214,6 +255,17 @@ static void touchup(csv_parse_t* cp)
 
 		// scan forward and squeeze.
 		while (p < q) {
+
+
+#ifdef __ARM_NEON__
+
+			if (*p == qte || *p == esc) {
+				p++;			/* skip the special char */
+			}
+
+			*s++ = *p++;		/* copy the escaped char */
+
+#else
 			/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
 			/* FIXME: possible buffer overrun */
 			/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/
@@ -244,9 +296,10 @@ static void touchup(csv_parse_t* cp)
 			/* copy head in p, skip the esc char, add the escaped char. */
 			memmove(s, p, m);
 			s += m, p += m;
-			assert(*p == esc); /* now, p must be (esc, X) */
+			assert(*p == esc || *p == qte); /* now, p must be (esc, X) */
 			p++;			   /* skip the esc char */
 			*s++ = *p++;	   /* copy the escaped char */
+#endif
 		}
 
 		*s = 0;				/* NUL term */
