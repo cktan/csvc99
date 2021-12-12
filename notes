@@ -33,11 +33,11 @@ ab\\cd   => ab\\cd (6)
 
 ab"c"d => abcd (4) ==> quotes are interpreted inside an unquoted field
 
-ab\cd => ab\cd (5) ==> escape is ignored inside an unquoted field
+ab\\cd => ab\\cd (6) ==> escape is ignored inside an unquoted field
 
 "ab\cd" => ab\cd (5)
 "ab\"cd" => ab"cd (5)
 "ab\\cd" => ab\cd (5) ==> escape only works on esc and quote
 
 "ab""cd" => abcd (4)
-"ab" "cd" => ab cd (5) ==> if escape is not QUOTE, then "" is interpreted as closing quote and opening quote
+"ab" "cd" => ab cd (5) ==> if escape is not QUOTE, then " is interpreted as either closing quote and opening quote

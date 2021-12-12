@@ -1,6 +1,6 @@
 CC = gcc
 CFILES = csv.c
-EXEC = csv2py csvsplit csvnorm csvstat
+EXEC = csv2py csvsplit csvnorm csvstat csvecho
 
 CFLAGS += -std=c99 -Wall -Wextra -mavx
 
@@ -27,6 +27,8 @@ csvsplit: csvsplit.c $(LIB)
 csvnorm: csvnorm.c $(LIB)
 
 csvstat: csvstat.c $(LIB)
+
+csvecho: csvecho.c $(LIB)
 
 prefix ?= /usr/local
 

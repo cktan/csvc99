@@ -80,7 +80,6 @@ struct csv_parse_t {
 	int	   fldmax;				/* num allocated elements in fld[] */
 	int	   fldtop;				/* num used elements in fld[]. fld[fldtop-1] is valid */
 	char** fld;					/* fld[] - points to each field */
-	char** escptr;				/* escptr[i] points into a quoted fld[i], to the first esc char */
 	int*   len;					/* len[] - length of each field */
 	char   qte, esc, delim;		/* quote, escape, delim chars */
 	char   nullstr[20];		    /* null indicator string */
@@ -101,9 +100,6 @@ struct csv_parse_t {
 		int64_t erownum;
 		int64_t efldnum;
 	} state;
-
-	/* SIMD vector for parsing quoted field */
-	__m128i scan_escaped_string; /* qte, esc */
 
 	scan_t scan;
 };
@@ -167,6 +163,7 @@ static inline const char* scan_next(scan_t* sp)
 }
 
 
+
 /* there are more fields than the current cp->fld[]. expand it. */
 static int expand(csv_parse_t* cp)
 {
@@ -177,11 +174,6 @@ static int expand(csv_parse_t* cp)
 		return -1;
 	}
 	cp->fld = xp;
-
-	if (! (xp = realloc(cp->escptr, sizeof(*cp->escptr) * max))) {
-		return -1;
-	}
-	cp->escptr = xp;
 
 	if (! (xp = realloc(cp->len, sizeof(*cp->len) * max))) {
 		return -1;
@@ -211,12 +203,6 @@ static int reterr(csv_parse_t* cp,
 	return -1;
 }
 
-/* helper to free a malloc */
-static void xfree(const void* s)
-{
-	if (s) free( (void*) s);
-}
-
 
 /**
  *	touchup - NUL terminate, replace nullstr, and unescape each field
@@ -236,40 +222,43 @@ static void touchup(csv_parse_t* cp)
 		char* q = p + cp->len[i];
 
 		*q = 0; /* NUL term */
-
-		char* const escptr = cp->escptr[i];
-		if (!escptr) {
-			// simple case: no escape chars.
-			// check for null
-			if (q - p == nullstrsz && 0 == memcmp(p, nullstr, q - p)) {
-				*fld = 0;		/* make it a nullptr to indicate sql NULL field */
-			}
-			// done with this field
+		if (q - p == nullstrsz && 0 == memcmp(p, nullstr, nullstrsz)) {
+			*fld = 0;		/* make it a nullptr to indicate sql NULL field */
 			continue;
 		}
 
-		/*
-		 * IN A QUOTED FIELD. Squeeze out the escape chars.
-		 */
-
-		// start from escptr
-		assert(p <= escptr && escptr < q);
-		char* s = p = escptr;
-		assert(*p == esc);
-
-		p++;					/* skip the first esc char */
-		*s++ = *p++;			/* copy the escaped char */
-
-		// scan forward and squeeze out subsequent esc chars, if any
-		while (p < q) {
-			if (*p == qte || *p == esc) {
-				p++;			/* skip the special char */
-			}
-
-			*s++ = *p++;		/* copy the escaped char */
+		int quoted = (p < q && *p == qte);
+		if (quoted) {
+			p++;
 		}
 
+		char* start = p;
+		char* s = p;
+		while (p < q) {
+			char ch = *p++;
+			int special = (ch == esc) | (ch == qte);
+			if (unlikely(special)) {
+				if (quoted && ch == esc) {
+					char nextch = (p < q ? *p : 0);
+					if (nextch == qte || nextch == esc) {
+						p++;
+						*s++ = nextch;
+						continue;
+					}
+				}
+				if (ch == qte) {
+					quoted = !quoted;
+					continue;
+				}
+				// fallthru
+			}
+			*s++ = ch;
+		}
+		assert(!quoted);
 		*s = 0;				/* NUL term */
+
+		cp->fld[i] = start;
+		cp->len[i] = s - start;
 	}
 }
 
@@ -293,17 +282,14 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 	const char* ppp = buf;
 	const char* const q = ppp + bufsz;
 
-
 	int	   cno = 0;				/* start at field 0 */
 	int	   nline = 0;			/* count num lines */
 
 	const char** fld;					/* points at cp->fld[cno] */
-	int quoted;
-	const char* escptr;
 	scan_t* scan = &cp->scan;
 	scan_reset(scan, ppp, q);
 
-	START_VAL: {
+	STARTVAL: {
 		if (unlikely(cno >= cp->fldmax)) {
 			if (expand(cp)) {
 				return reterr(cp, CSV_EOUTOFMEMORY, "out of memory",
@@ -315,109 +301,79 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		/* field starts here */
 		fld = (const char**) &cp->fld[cno];
 		*fld = ppp;
-		escptr = 0;
+		goto UNQUOTED;
+	}
 
+	UNQUOTED: {
 		// point ppp at next special char
 		if (0 == (ppp = scan_next(scan)))
 			return 0;
 
-		// quoted when ppp is at the first char and it is a qte
-		quoted = (ppp == *fld && *ppp == qte);
+		const char ch = *ppp;
+		if (likely(ch == delim || ch == '\r' || ch == '\n'))
+			goto ENDVAL;
 
-		// a value can be either quoted or unquoted
-		if (unlikely(quoted)) {
-			goto QUOTED_VAL;
-		} else {
-			// We are either inside an UNQUOTED VAL or at end of a field
-			// ch could be qte, esc, delim, \r or \n
-			int ch = *ppp;
-			if (unlikely(ch == qte || ch == esc)) {
-				// qte or esc is not permitted in an unquoted field
-				return reterr(cp, CSV_EQUOTE, "unexpected qte or esc char in unquoted field",
-							  cno, nline, ppp - buf);
-			}
-			// ppp is at a delim or CR or LF
-			goto FINISH;
-		}
+		if (ch == qte)
+			goto QUOTED;
+
+		assert(ch == esc);	/* ignore */
+		goto UNQUOTED;		/* still in UNQUOTED */
 	}
 
-	QUOTED_VAL: {
-		if (0 == (ppp = scan_next(scan)))		/* next special char */
+	QUOTED: {
+		if (0 == (ppp = scan_next(scan)))
 			return 0;
 
-		const int cur = *ppp;
-		if (cur == qte) {
-			const char* xp;
-			if (0 == (xp = scan_next(scan)))
-				return 0;
-
-			// expect a special char after qte
-			if (unlikely(xp != ppp + 1)) {
-				return reterr(cp, CSV_EQUOTE, "bad value after quote", cno, nline, ppp - buf);
-			}
-			// handle qte qte
-			if (esc == qte) {
-				if (*xp == qte) {
-					escptr = escptr ? escptr : ppp;
-					goto QUOTED_VAL;
+		const char ch = *ppp;
+		if (ch == esc) {
+			char nextch = (ppp + 1 < q ? ppp[1] : 0);
+			if (nextch == qte || nextch == esc) {
+				if (unlikely(ppp+1 != scan_next(scan))) {
+					return reterr(cp, CSV_EINTERNAL, "internal error: bad pointer value", cno, nline, ppp - buf);
 				}
+				goto QUOTED;
 			}
-			ppp = xp;
-			goto FINISH;
-		}
-
-		if (cur == esc) {
-			assert( esc != qte);
-			escptr = escptr ? escptr : ppp;
-			ppp += 2;				/* skip 2 chars */
-			if (ppp >= q)
+			if (nextch == 0) {
 				return 0;
-
-			// reset the scan to start at ppp
-			scan_reset(scan, ppp, q);
-			goto QUOTED_VAL;
+			}
+			// fallthru
+		}
+		if (likely(ch == qte)) {
+			// close quote
+			goto UNQUOTED;
 		}
 
-		// ignore these values inside a quote
-		assert(cur == '\n' || '\r' || cur == delim);
-		nline += (cur == '\n') ? 1 : 0; /* line accounting */
-		goto QUOTED_VAL;				/* still in same field */
+		goto QUOTED;
 	}
 
-	FINISH: {
+	ENDVAL: {
 		/* ppp is pointing at [delim, \r, \n] */
 		assert(*ppp == delim || *ppp == '\r' || *ppp == '\n');
 
 		/* fin the field */
 		cp->len[cno] = ppp - *fld;
-		cp->escptr[cno] = (char*) escptr;
-
-		if (quoted) {
-			/* point between the first and last quote char */
-			cp->fld[cno] += 1;
-			cp->len[cno] -= 2;
-		}
-
 		cno++;
 
-		// eat the cur char
-		const int cur = *ppp++;
+		const char ch = *ppp;
 
 		/* the field is done? */
-		if (likely(cur == delim)) {
-			goto START_VAL;
+		if (likely(ch == delim)) {
+			goto STARTVAL;		/* start next field */
 		}
 
 		/* the row is done! */
-
+		char nextch = (ppp + 1 < q ? ppp[1] : 0);
 		cp->fldtop = cno;
-		if (cur == '\n' || (cur == '\r' && ppp < q && *ppp == '\n' && ppp++)) {
+		if (likely(ch == '\n' || (ch == '\r' && nextch == '\n'))) {
 			goto FINROW;
 		}
-		return reterr(cp, CSV_ECRLF, "CRLF expected",
-					  cno, nline, ppp - buf);
-	}
 
+		/* need next char */
+		if (ppp + 1 >= q)
+			return 0;
+
+		return reterr(cp, CSV_ECRLF, "CRLF expected", cno, nline, ppp - buf);
+	}
 
 	FINROW: {
 		int rowsz = ppp - buf;
@@ -473,7 +429,7 @@ int csv_feed_last(csv_parse_t* const cp,
 	/* handle the case where last row is missing \n */
 	int appended = 0;
 	if (buf[bufsz-1] != '\n') {
-		xfree(cp->lastbuf);
+		free(cp->lastbuf);
 		cp->lastbuf = malloc(bufsz + 2);
 		if (! cp->lastbuf) {
 			return reterr(cp, CSV_EOUTOFMEMORY, "out of memory", 0, 0, 0);
@@ -515,10 +471,6 @@ csv_parse_t* csv_open(int qte,
 	cp->esc = esc;
 	cp->delim = delim;
 
-	/* match while inside a quoted string field */
-	__v16qi v2 = { qte, esc };
-	cp->scan_escaped_string = (__m128i) v2;
-
 	/* match while outside a quoted string field */
 	__v16qi v5 = { qte, esc, delim, '\r', '\n' };
 	cp->scan.match = (__m128i) v5;
@@ -532,11 +484,10 @@ csv_parse_t* csv_open(int qte,
 void csv_close(csv_parse_t* cp)
 {
 	if (cp) {
-		xfree(cp->fld);
-		xfree(cp->escptr);
-		xfree(cp->len);
-		xfree(cp->lastbuf);
-		xfree(cp);
+		free(cp->fld);
+		free(cp->len);
+		free(cp->lastbuf);
+		free(cp);
 	}
 }
 
