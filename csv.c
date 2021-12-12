@@ -496,6 +496,7 @@ void csv_close(csv_parse_t* cp)
 	if (cp) {
 		free(cp->fld);
 		free(cp->len);
+		free(cp->quoted);
 		free(cp->lastbuf);
 		free(cp);
 	}
