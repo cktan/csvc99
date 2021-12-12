@@ -81,6 +81,7 @@ struct csv_parse_t {
 	int	   fldtop;				/* num used elements in fld[]. fld[fldtop-1] is valid */
 	char** fld;					/* fld[] - points to each field */
 	int*   len;					/* len[] - length of each field */
+	char*  quoted;				/* quoted[] - flag if field is quoted */
 	char   qte, esc, delim;		/* quote, escape, delim chars */
 	char   nullstr[20];		    /* null indicator string */
 	int	   nullstrsz;			/* strlen(nullstr) */
@@ -180,6 +181,11 @@ static int expand(csv_parse_t* cp)
 	}
 	cp->len = xp;
 
+	if (! (xp = realloc(cp->quoted, sizeof(*cp->quoted) * max))) {
+		return -1;
+	}
+	cp->quoted = xp;
+
 	cp->fldmax = max;
 	return 0;
 }
@@ -227,18 +233,18 @@ static void touchup(csv_parse_t* cp)
 			continue;
 		}
 
-		int quoted = (p < q && *p == qte);
-		if (quoted) {
-			p++;
+		if (!cp->quoted[i]) {
+			continue;
 		}
 
+		int inquote = 0;
 		char* start = p;
 		char* s = p;
 		while (p < q) {
 			char ch = *p++;
 			int special = (ch == esc) | (ch == qte);
 			if (unlikely(special)) {
-				if (quoted && ch == esc) {
+				if (inquote && ch == esc) {
 					char nextch = (p < q ? *p : 0);
 					if (nextch == qte || nextch == esc) {
 						p++;
@@ -247,14 +253,14 @@ static void touchup(csv_parse_t* cp)
 					}
 				}
 				if (ch == qte) {
-					quoted = !quoted;
+					inquote = !inquote;
 					continue;
 				}
 				// fallthru
 			}
 			*s++ = ch;
 		}
-		assert(!quoted);
+		assert(!inquote);
 		*s = 0;				/* NUL term */
 
 		cp->fld[i] = start;
@@ -288,6 +294,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 	const char** fld;					/* points at cp->fld[cno] */
 	scan_t* scan = &cp->scan;
 	scan_reset(scan, ppp, q);
+	int quoted = 0;
 
  STARTVAL: {
 		if (unlikely(cno >= cp->fldmax)) {
@@ -313,14 +320,16 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		if (likely(ch == delim || ch == '\r' || ch == '\n'))
 			goto ENDVAL;
 
-		if (ch == qte)
+		if (ch == qte) {
 			goto QUOTED;
+		}
 
 		assert(ch == esc);	/* ignore */
 		goto UNQUOTED;		/* still in UNQUOTED */
 	}
 
  QUOTED: {
+		quoted = 1;
 		if (0 == (ppp = scan_next(scan)))
 			return 0;
 
@@ -352,6 +361,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 
 		/* fin the field */
 		cp->len[cno] = ppp - *fld;
+		cp->quoted[cno] = quoted;
 		cno++;
 
 		const char ch = *ppp++;
@@ -609,7 +619,7 @@ int csv_scan(intptr_t handle,
 	free(buf);
 	return 0;
 
-	bail:
+ bail:
 	free(buf);
 	return -1;
 }
