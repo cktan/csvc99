@@ -289,7 +289,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 	scan_t* scan = &cp->scan;
 	scan_reset(scan, ppp, q);
 
-	STARTVAL: {
+ STARTVAL: {
 		if (unlikely(cno >= cp->fldmax)) {
 			if (expand(cp)) {
 				return reterr(cp, CSV_EOUTOFMEMORY, "out of memory",
@@ -304,7 +304,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		goto UNQUOTED;
 	}
 
-	UNQUOTED: {
+ UNQUOTED: {
 		// point ppp at next special char
 		if (0 == (ppp = scan_next(scan)))
 			return 0;
@@ -320,7 +320,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		goto UNQUOTED;		/* still in UNQUOTED */
 	}
 
-	QUOTED: {
+ QUOTED: {
 		if (0 == (ppp = scan_next(scan)))
 			return 0;
 
@@ -346,7 +346,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		goto QUOTED;
 	}
 
-	ENDVAL: {
+ ENDVAL: {
 		/* ppp is pointing at [delim, \r, \n] */
 		assert(*ppp == delim || *ppp == '\r' || *ppp == '\n');
 
@@ -354,7 +354,7 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		cp->len[cno] = ppp - *fld;
 		cno++;
 
-		const char ch = *ppp;
+		const char ch = *ppp++;
 
 		/* the field is done? */
 		if (likely(ch == delim)) {
@@ -362,20 +362,20 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		}
 
 		/* the row is done! */
-		char nextch = (ppp + 1 < q ? ppp[1] : 0);
 		cp->fldtop = cno;
-		if (likely(ch == '\n' || (ch == '\r' && nextch == '\n'))) {
+
+		if (ch == '\n')
+			goto FINROW;
+
+		if (ch == '\r' && ppp < q && *ppp == '\n') {
+			ppp++;
 			goto FINROW;
 		}
-
-		/* need next char */
-		if (ppp + 1 >= q)
-			return 0;
 
 		return reterr(cp, CSV_ECRLF, "CRLF expected", cno, nline, ppp - buf);
 	}
 
-	FINROW: {
+ FINROW: {
 		int rowsz = ppp - buf;
 		nline++;
 		cp->state.linenum += nline;
@@ -385,7 +385,6 @@ int csv_line(csv_parse_t* const cp, const char* buf, int bufsz)
 		return rowsz;
 	}
 }
-
 
 
 int csv_feed(csv_parse_t* const cp,

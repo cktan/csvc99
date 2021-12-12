@@ -61,63 +61,63 @@ char nullstr[20] = {0};
 
 void usage(int exitcode, const char* msg)
 {
-    perr(usagestr, pname);
-    if (msg) {
-        perr("\n%s\n", msg);
-    }
-    exit(exitcode);
+	perr(usagestr, pname);
+	if (msg) {
+		perr("\n%s\n", msg);
+	}
+	exit(exitcode);
 }
 
 void parse_cmdline(int argc, char* const* argv)
 {
-    pname = argv[0];
-    int opt;
-    char *q, *e, *d, *n;
-    q = e = d = n = 0;
-    while ((opt = getopt(argc, argv, "d:q:e:n:h")) != -1) {
-        switch (opt) {
-        case 'd': d = optarg; break;
-        case 'q': q = optarg; break;
-        case 'e': e = optarg; break;
-        case 'n': n = optarg; break;
+	pname = argv[0];
+	int opt;
+	char *q, *e, *d, *n;
+	q = e = d = n = 0;
+	while ((opt = getopt(argc, argv, "d:q:e:n:h")) != -1) {
+		switch (opt) {
+		case 'd': d = optarg; break;
+		case 'q': q = optarg; break;
+		case 'e': e = optarg; break;
+		case 'n': n = optarg; break;
 		case 'h': usage(0, 0); break;
-        default: usage(1, 0); break;
-        }
-    }
-    
-    /* fname */
-    if (optind == argc) 
-        ; /* read from stdin */
-    else if (optind + 1 == argc) 
-        fname = argv[optind];
-    else 
-        usage(1, "Error: please supply only one filename");
+		default: usage(1, 0); break;
+		}
+	}
+
+	/* fname */
+	if (optind == argc)
+		; /* read from stdin */
+	else if (optind + 1 == argc)
+		fname = argv[optind];
+	else
+		usage(1, "Error: please supply only one filename");
 
 
-    /* qte */
-    if (q) {
-        if (strlen(q) != 1) {
-            usage(1, "Error: -q quote-char expects a single char.");
-        }
-        qte = q[0];
-    }
+	/* qte */
+	if (q) {
+		if (strlen(q) != 1) {
+			usage(1, "Error: -q quote-char expects a single char.");
+		}
+		qte = q[0];
+	}
 
-    /* esc */
-    if (e) {
-        if (strlen(e) != 1) {
-            usage(1, "Error: -e escape-char expects a single char.");
-        }
-        esc= e[0];
-    }
+	/* esc */
+	if (e) {
+		if (strlen(e) != 1) {
+			usage(1, "Error: -e escape-char expects a single char.");
+		}
+		esc= e[0];
+	}
 
-    /* delim */
-    if (d) {
-        if (strlen(d) != 1) {
-            usage(1, "Error: -d delim-char expects a single char.");
-        }
-        delim = d[0];
-    }
-	
+	/* delim */
+	if (d) {
+		if (strlen(d) != 1) {
+			usage(1, "Error: -d delim-char expects a single char.");
+		}
+		delim = d[0];
+	}
+
 	/* nullstr */
 	if (n) {
 		if (strlen(n) >= 20) {
@@ -131,20 +131,20 @@ void parse_cmdline(int argc, char* const* argv)
 
 void print_special(const char* s)
 {
-    for ( ; *s; s++) {
-        switch (*s) {
-        case '\n':
-            printf("\\n");
-            break;
-            
-        case '\'': 
-        case '\\':
-            putchar('\\');
-            // fallthru
-        default:
-            putchar(*s);
-        }
-    }
+	for ( ; *s; s++) {
+		switch (*s) {
+		case '\n':
+			printf("\\n");
+			break;
+
+		case '\'':
+		case '\\':
+			putchar('\\');
+			// fallthru
+		default:
+			putchar(*s);
+		}
+	}
 }
 
 
@@ -160,25 +160,25 @@ int do_row(intptr_t handle,
 		   int ncol)
 {
 	(void) handle;
-    printf("%s", rownum > 1 ? ",\n" : "");
-    printf("    [");
-    for (int i = 0; i < ncol; i++) {
-        char* s = col[i];
-		printf("%s", i ? "," : ""); 
-        if (s) {
-            /* search of squote, backslash, or newline */
-            if (strpbrk(s, "'\\\n")) {
-                printf("'");
-                print_special(col[i]);
-                printf("'");
-            } else {
-                printf("'%s'", col[i]);
-            }
-        }
-        else
-            printf("None");
-    }
-    printf("]");
+	printf("%s", rownum > 1 ? ",\n" : "");
+	printf("	[");
+	for (int i = 0; i < ncol; i++) {
+		char* s = col[i];
+		printf("%s", i ? "," : "");
+		if (s) {
+			/* search of squote, backslash, or newline */
+			if (strpbrk(s, "'\\\n")) {
+				printf("'");
+				print_special(col[i]);
+				printf("'");
+			} else {
+				printf("'%s'", col[i]);
+			}
+		}
+		else
+			printf("None");
+	}
+	printf("]");
 
 	return 0;
 }
@@ -189,30 +189,30 @@ void do_error(intptr_t handle, int errtype, const char* errmsg, csv_parse_t* cp)
 {
 	(void) handle;
 	(void) errtype;
-	errmsg = cp ? csv_errmsg(cp) : errmsg;
-	fatal("ERROR: %s\n", csv_errmsg(cp));
+	(void) cp;
+	fatal("ERROR: %s\n", errmsg);
 }
 
 
 int main(int argc, char* argv[])
 {
-    parse_cmdline(argc, argv);
-    FILE* fp = stdin;
+	parse_cmdline(argc, argv);
+	FILE* fp = stdin;
 
 	if (fname && ! (fp = fopen(fname, "r"))) {
 		perr("ERROR: fopen %s - %s\n", fname, strerror(errno));
 		exit(1);
-    }
+	}
 
-    printf("[\n");
+	printf("[\n");
 	csv_scan((intptr_t)fp,
 			 qte, esc, delim, nullstr,
 			 do_read,
 			 do_row,
 			 do_error);
-    printf("\n]\n\n");
+	printf("\n]\n\n");
 
-    fclose(fp);
+	fclose(fp);
 
-    return 0;
+	return 0;
 }
