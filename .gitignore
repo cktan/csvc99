@@ -2,6 +2,8 @@
 /csvnorm
 /csvsplit
 /csvstat
+/csvecho
+*~
 
 # Prerequisites
 *.d
