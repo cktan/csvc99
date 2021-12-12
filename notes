@@ -1,0 +1,43 @@
+POSTGRES interpretation
+
+% cat t.csv
+abcd
+ab"c"d
+ab""c""d
+ab\cd
+ab\\cd
+"abcd"
+"ab\cd"
+"ab\"cd"
+"ab""cd"
+"ab" "cd"
+
+
+=== Command:
+COPY t from file.csv CSV ESCAPE E'\\';
+
+=== Result:
+abcd	 => abcd (4)
+ab"c"d 	 => abcd (4)
+ab""c""d => abcd (4)
+ab\cd 	 => ab\cd (5)
+ab\\cd   => ab\\cd (6)
+"abcd"   => abcd (4)
+"ab\cd"  => ab\cd (5)
+"ab\"cd" => ab"cd (5)
+"ab\\cd" => ab\cd (5)
+"ab""cd" => abcd (4)
+"ab" "cd" => ab cd (5)
+
+=== Observations:
+
+ab"c"d => abcd (4) ==> quotes are interpreted inside an unquoted field
+
+ab\cd => ab\cd (5) ==> escape is ignored inside an unquoted field
+
+"ab\cd" => ab\cd (5)
+"ab\"cd" => ab"cd (5)
+"ab\\cd" => ab\cd (5) ==> escape only works on esc and quote
+
+"ab""cd" => abcd (4)
+"ab" "cd" => ab cd (5) ==> if escape is not QUOTE, then "" is interpreted as closing quote and opening quote
