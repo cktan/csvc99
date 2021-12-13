@@ -189,7 +189,7 @@ void do_error(intptr_t handle, int errtype, const char* errmsg, csv_parse_t* cp)
 {
 	(void) handle;
 	(void) errtype;
-	(void) cp;
+	errmsg = cp ? csv_errmsg(cp) : errmsg;
 	fatal("ERROR: %s\n", errmsg);
 }
 

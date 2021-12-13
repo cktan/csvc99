@@ -560,7 +560,7 @@ int csv_scan(intptr_t handle,
 		// expand buf[] if p..q fills up the whole buf
 		if (q - p == bufsz) {
 			char* newbuf;
-			int   newsz = bufsz + 1024 * 1024 * 10;
+			int   newsz = bufsz * 1.5;
 
 			if (! (newbuf = realloc(buf, newsz))) {
 				sprintf(msg, "cannot expand buffer beyond %d bytes", bufsz);
