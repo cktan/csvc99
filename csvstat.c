@@ -11,7 +11,7 @@
   cktanx@gmail.com.
 */
 
-const char* usagestr = "\n\
+const char *usagestr = "\n\
   USAGE: %s [-h] [-d delim] [-q quote] [-e esc] [-n nullstr] [FILE]\n\
                         \n\
                         \n\
@@ -39,180 +39,174 @@ const char* usagestr = "\n\
 ";
 
 #define _GNU_SOURCE
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <inttypes.h>
 #include "csv.h"
+#include <errno.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-const char* pname = 0;
-const char* fname = 0;
+const char *pname = 0;
+const char *fname = 0;
 int qte = '"';
 int esc = '"';
 int delim = ',';
 char nullstr[20] = {0};
 
-
 #define perr(M, ...) fprintf(stderr, M, ##__VA_ARGS__)
 #define pout(M, ...) fprintf(stdout, M, ##__VA_ARGS__)
-#define fatal(M, ...) do { fprintf(stderr, M, ##__VA_ARGS__); exit(1); } while (0)
+#define fatal(M, ...)                                                          \
+  do {                                                                         \
+    fprintf(stderr, M, ##__VA_ARGS__);                                         \
+    exit(1);                                                                   \
+  } while (0)
 
-
-void usage(int exitcode, const char* msg)
-{
-    perr(usagestr, pname);
-    if (msg) {
-        perr("\n%s\n", msg);
-    }
-    exit(exitcode);
+void usage(int exitcode, const char *msg) {
+  perr(usagestr, pname);
+  if (msg) {
+    perr("\n%s\n", msg);
+  }
+  exit(exitcode);
 }
 
-void parse_cmdline(int argc, char* const* argv)
-{
-    pname = argv[0];
-    int opt;
-    char *q, *e, *d, *n;
-    q = e = d = n = 0;
-    while ((opt = getopt(argc, argv, "d:q:e:n:h")) != -1) {
-        switch (opt) {
-        case 'd': d = optarg; break;
-        case 'q': q = optarg; break;
-        case 'e': e = optarg; break;
-        case 'n': n = optarg; break;
-		case 'h': usage(0, 0); break;
-        default: usage(1, 0); break;
-        }
+void parse_cmdline(int argc, char *const *argv) {
+  pname = argv[0];
+  int opt;
+  char *q, *e, *d, *n;
+  q = e = d = n = 0;
+  while ((opt = getopt(argc, argv, "d:q:e:n:h")) != -1) {
+    switch (opt) {
+    case 'd':
+      d = optarg;
+      break;
+    case 'q':
+      q = optarg;
+      break;
+    case 'e':
+      e = optarg;
+      break;
+    case 'n':
+      n = optarg;
+      break;
+    case 'h':
+      usage(0, 0);
+      break;
+    default:
+      usage(1, 0);
+      break;
     }
-    
-    /* fname */
-    if (optind == argc) 
-        ; /* read from stdin */
-    else if (optind + 1 == argc) 
-        fname = argv[optind];
-    else 
-        usage(1, "Error: please supply only one filename");
+  }
 
+  /* fname */
+  if (optind == argc)
+    ; /* read from stdin */
+  else if (optind + 1 == argc)
+    fname = argv[optind];
+  else
+    usage(1, "Error: please supply only one filename");
 
-    /* qte */
-    if (q) {
-        if (strlen(q) != 1) {
-            usage(1, "Error: -q quote-char expects a single char.");
-        }
-        qte = q[0];
+  /* qte */
+  if (q) {
+    if (strlen(q) != 1) {
+      usage(1, "Error: -q quote-char expects a single char.");
     }
+    qte = q[0];
+  }
 
-    /* esc */
-    if (e) {
-        if (strlen(e) != 1) {
-            usage(1, "Error: -e escape-char expects a single char.");
-        }
-        esc= e[0];
+  /* esc */
+  if (e) {
+    if (strlen(e) != 1) {
+      usage(1, "Error: -e escape-char expects a single char.");
     }
+    esc = e[0];
+  }
 
-    /* delim */
-    if (d) {
-        if (strlen(d) != 1) {
-            usage(1, "Error: -d delim-char expects a single char.");
-        }
-        delim = d[0];
+  /* delim */
+  if (d) {
+    if (strlen(d) != 1) {
+      usage(1, "Error: -d delim-char expects a single char.");
     }
-	
-	/* nullstr */
-	if (n) {
-		if (strlen(n) >= 20) {
-			usage(1, "Error: -n nullstr is too long. max is 19 chars");
-		}
-		strcpy(nullstr, n);
-	}
+    delim = d[0];
+  }
+
+  /* nullstr */
+  if (n) {
+    if (strlen(n) >= 20) {
+      usage(1, "Error: -n nullstr is too long. max is 19 chars");
+    }
+    strcpy(nullstr, n);
+  }
 }
-
 
 struct {
-	int64_t nbytes;
-	int64_t nrows;
-	int     min_ncols, max_ncols;
-	int     min_rowsz, max_rowsz;
+  int64_t nbytes;
+  int64_t nrows;
+  int min_ncols, max_ncols;
+  int min_rowsz, max_rowsz;
 } tot = {0};
 
-
-int do_read(intptr_t handle, char* buf, int bufsz)
-{
-	FILE* fp = (FILE*) handle;
-	int nb = fread(buf, 1, bufsz, fp);
-	if (nb > 0)
-		tot.nbytes += nb;
-	return nb;
+int do_read(intptr_t handle, char *buf, int bufsz) {
+  FILE *fp = (FILE *)handle;
+  int nb = fread(buf, 1, bufsz, fp);
+  if (nb > 0)
+    tot.nbytes += nb;
+  return nb;
 }
 
+int do_row(intptr_t handle, int64_t rownum, char **col, int ncol) {
+  (void)handle;
+  (void)col;
+  char *last = col[ncol - 1];
+  int rowsz = last + strlen(last) - col[0] + 1;
 
-int do_row(intptr_t handle,
-		   int64_t rownum,
-		   char** col,
-		   int ncol)
-{
-	(void) handle;
-	(void) col;
-	char* last = col[ncol-1];
-	int rowsz = last + strlen(last) - col[0] + 1;
-	
-	tot.nrows = rownum;
+  tot.nrows = rownum;
 
-	if (tot.min_ncols == 0 || ncol < tot.min_ncols)
-		tot.min_ncols = ncol;
-	if (tot.max_ncols < ncol)
-		tot.max_ncols = ncol;
+  if (tot.min_ncols == 0 || ncol < tot.min_ncols)
+    tot.min_ncols = ncol;
+  if (tot.max_ncols < ncol)
+    tot.max_ncols = ncol;
 
-	if (tot.min_rowsz == 0 || rowsz < tot.min_rowsz)
-		tot.min_rowsz = rowsz;
-	if (tot.max_rowsz < rowsz)
-		tot.max_rowsz = rowsz;
+  if (tot.min_rowsz == 0 || rowsz < tot.min_rowsz)
+    tot.min_rowsz = rowsz;
+  if (tot.max_rowsz < rowsz)
+    tot.max_rowsz = rowsz;
 
-	return 0;
+  return 0;
 }
 
-
-
-void do_error(intptr_t handle, int errtype, const char* errmsg, csv_parse_t* cp)
-{
-	(void) handle;
-	(void) errtype;
-	errmsg = cp ? csv_errmsg(cp) : errmsg;
-	fatal("ERROR: %s\n", csv_errmsg(cp));
+void do_error(intptr_t handle, int errtype, const char *errmsg,
+              csv_parse_t *cp) {
+  (void)handle;
+  (void)errtype;
+  errmsg = cp ? csv_errmsg(cp) : errmsg;
+  fatal("ERROR: %s\n", csv_errmsg(cp));
 }
 
+int main(int argc, char *argv[]) {
+  parse_cmdline(argc, argv);
+  FILE *fp = stdin;
 
-int main(int argc, char* argv[])
-{
-    parse_cmdline(argc, argv);
-    FILE* fp = stdin;
+  if (fname && !(fp = fopen(fname, "r"))) {
+    perr("ERROR: fopen %s - %s\n", fname, strerror(errno));
+    exit(1);
+  }
 
-	if (fname && ! (fp = fopen(fname, "r"))) {
-		perr("ERROR: fopen %s - %s\n", fname, strerror(errno));
-		exit(1);
-    }
+  csv_scan((intptr_t)fp, qte, esc, delim, nullstr, do_read, do_row, do_error);
 
-	csv_scan((intptr_t)fp,
-			 qte, esc, delim, nullstr,
-			 do_read,
-			 do_row,
-			 do_error);
+  fclose(fp);
 
-    fclose(fp);
+  printf("      #bytes: %" PRId64 "\n", tot.nbytes);
+  printf("       #rows: %" PRId64 "\n", tot.nrows);
+  printf("    #columns: ");
+  if (tot.min_ncols == tot.max_ncols) {
+    printf("%d\n", tot.min_ncols);
+  } else {
+    printf("%d .. %d\n", tot.min_ncols, tot.max_ncols);
+  }
+  printf("avg row size: %d\n", (int)(tot.nbytes / tot.nrows));
+  printf("min row size: %d\n", tot.min_rowsz);
+  printf("max row size: %d\n", tot.max_rowsz);
 
-
-	printf("      #bytes: %" PRId64 "\n", tot.nbytes);
-	printf("       #rows: %" PRId64 "\n", tot.nrows);
-	printf("    #columns: ");
-	if (tot.min_ncols == tot.max_ncols) {
-		printf("%d\n", tot.min_ncols);
-	} else {
-		printf("%d .. %d\n", tot.min_ncols, tot.max_ncols);
-	}
-	printf("avg row size: %d\n", (int) (tot.nbytes / tot.nrows));
-	printf("min row size: %d\n", tot.min_rowsz);
-	printf("max row size: %d\n", tot.max_rowsz);
-	
-    return 0;
+  return 0;
 }

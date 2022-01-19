@@ -30,6 +30,9 @@ csvstat: csvstat.c $(LIB)
 
 csvecho: csvecho.c $(LIB)
 
+format:
+	clang-format -i $(shell find . -name '*.[ch]')
+
 prefix ?= /usr/local
 
 install: all
@@ -39,3 +42,5 @@ install: all
 
 clean:
 	rm -f *.o $(EXEC) $(LIB)
+
+.PHONY: all format install clean
