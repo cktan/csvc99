@@ -5,7 +5,7 @@
 
 int main(int argc, char **argv) {
   if (argc != 2) {
-    fprintf(stderr, "usage: csvstring %s\n", argv[0]);
+    fprintf(stderr, "usage: %s csv-encoded-string\n", argv[0]);
     exit(1);
   }
 
