@@ -248,12 +248,16 @@ static void touchup(csv_parse_t *cp) {
     cp->len[i] = s - start;
   }
 
+  // remove the last \r in the last field
   if (top > 0) {
     char *p = cp->fld[top - 1];
-    int len = cp->len[top - 1];
-    if (len > 0 && p[len - 1 - 1] == '\r') {
-      cp->len[top - 1] -= 1;
-      p[len - 1] = 0;
+    char* q = p + cp->len[top-1];
+    if (q - p > 0 && q[-1] == '\r') {
+      *--q = 0;
+      cp->len[top-1] = q - p;
+      if (q - p == nullstrsz && 0 == memcmp(p, nullstr, nullstrsz)) {
+        cp->fld[top-1] = 0;     /* make it a nullptr to indicate sql NULL field */
+      }
     }
   }
 }
