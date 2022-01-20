@@ -1,8 +1,8 @@
-CC = gcc
+CC = gcc-11
 CFILES = csv.c
 EXEC = csv2py csvsplit csvnorm csvstat csvecho
 
-CFLAGS += -std=c99 -Wall -Wextra -mavx
+CFLAGS += -std=c99 -Wall -Wextra -mavx2 -mfma -mbmi
 
 # to compile for debug: make DEBUG=1
 # to compile for no debug: make
@@ -10,7 +10,7 @@ ifdef DEBUG
     CFLAGS += -O0 -g
 else
     # NOTE: on gcc 6, csvstat produced by -O2 runs faster than -O3
-    CFLAGS += -O2 -DNDEBUG
+    CFLAGS += -O3 -DNDEBUG
 endif
 
 LIB = libcsv.a

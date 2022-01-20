@@ -73,7 +73,9 @@ static void prow(char *ptr, int len) {
 }
 
 void do_split(FILE *fp) {
-  csv_parse_t *cp = csv_open('"', '"', ',', "");
+  char nullstr[20];
+  nullstr[0] = 0;
+  csv_parse_t *cp = csv_open('"', '"', ',', nullstr);
   if (!cp) {
     fatal("csv_open failed");
   }
