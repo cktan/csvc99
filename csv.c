@@ -65,13 +65,12 @@ static inline uint32_t fillbmap(const __m256i *p, char qte, char esc,
                                 char delim) {
   __m256i src = _mm256_loadu_si256(p);
   __m256i pat0 = _mm256_set1_epi8(qte);
-  __m256i pat1 = _mm256_set1_epi8(esc);
   __m256i pat2 = _mm256_set1_epi8(delim);
   __m256i pat3 = _mm256_set1_epi8('\n');
 
   int32_t flag0 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(src, pat0));
-  int32_t flag1 =
-      (esc == qte) ? 0 : _mm256_movemask_epi8(_mm256_cmpeq_epi8(src, pat1));
+  int32_t flag1 = (esc == qte) ? 0 : _mm256_movemask_epi8(_mm256_cmpeq_epi8(
+                                         src, _mm256_set1_epi8(esc)));
   int32_t flag2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(src, pat2));
   int32_t flag3 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(src, pat3));
 
