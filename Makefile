@@ -1,6 +1,6 @@
 CC = gcc-11
 CFILES = csv.c
-EXEC = csv2py csvsplit csvnorm csvstat csvecho
+EXEC = csv2py csvsplit csvnorm csvstat csvecho t
 
 CFLAGS += -std=c99 -Wall -Wextra -mavx2 -mfma -mbmi2
 
@@ -20,15 +20,8 @@ all: $(LIB) $(EXEC)
 libcsv.a: csv.o
 	ar -rcs $@ $^
 
-csv2py: csv2py.c $(LIB)
 
-csvsplit: csvsplit.c $(LIB)
-
-csvnorm: csvnorm.c $(LIB)
-
-csvstat: csvstat.c $(LIB)
-
-csvecho: csvecho.c $(LIB)
+$(EXEC): $(LIB)
 
 format:
 	clang-format -i $(shell find . -name '*.[ch]')
