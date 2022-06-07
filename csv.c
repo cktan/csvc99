@@ -232,12 +232,14 @@ static void touchup(csv_parse_t *cp) {
   // remove the last \r in the last field
   if (top > 0) {
     char *p = cp->fld[top - 1];
-    char *q = p + cp->len[top - 1];
-    if (q - p > 0 && q[-1] == '\r') {
-      *--q = 0;
-      cp->len[top - 1] = q - p;
-      if (q - p == nullstrsz && 0 == memcmp(p, nullstr, nullstrsz)) {
-        cp->fld[top - 1] = 0; /* make it a nullptr to indicate sql NULL field */
+    if (p) {
+      char *q = p + cp->len[top - 1];
+      if (q - p > 0 && q[-1] == '\r') {
+        *--q = 0;
+        cp->len[top - 1] = q - p;
+        if (q - p == nullstrsz && 0 == memcmp(p, nullstr, nullstrsz)) {
+          cp->fld[top - 1] = 0; /* make it a nullptr to indicate sql NULL field */
+        }
       }
     }
   }
