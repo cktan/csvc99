@@ -3,7 +3,7 @@ import subprocess
 
 def run(cmd, inp=''):
     p = subprocess.Popen(cmd, shell=False, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-    p.stdin.write(inp)
+    p.stdin.write(inp.encode('utf-8'))
     p.stdin.close()
     out = p.stdout.read()
     rc = p.wait()
@@ -29,10 +29,10 @@ TEST = [(a.strip(), b.strip()) for (a, b) in TEST]
 for (a, b) in TEST:
     out = run(["./csvecho", a])
     if out[0] != 0:
-        print "%s ... failed\n" % a
+        print(f"{a} ... failed\n")
         sys.exit(1)
     res = out[1].rstrip()
-    if res != b:
-        print "%s ... %s != %s" % (a, res, b)
+    if res != b.encode('utf-8'):
+        print(f"{a} ... {res} != {b}")
         sys.exit(1)
-    print "%s => %s (ok)" % (a, b)
+    print(f"{a} => {b} (ok)")
