@@ -14,8 +14,7 @@ int main(int argc, char **argv) {
   char **field;
   int nfield;
   char nullstr[20];
-  nullstr[0] = 0;
-  ;
+  nullstr[0] = 0;;
   csv_parse_t *cp = csv_open('\"', '\\', '|', nullstr);
 
   int n = csv_feed_last(cp, line, strlen(line), &field, &nfield);

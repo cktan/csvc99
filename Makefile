@@ -1,8 +1,14 @@
+ARCH = $(shell uname -m)
 CC = gcc-11
 CFILES = csv.c
-EXEC = csv2py csvsplit csvnorm csvstat csvecho t
+EXEC = csv2py csvsplit csvnorm csvstat csvecho
 
-CFLAGS += -std=c99 -Wall -Wextra -mavx2 -mfma -mbmi2
+CFLAGS = -std=c99 -Wall -Wextra
+ifeq ($(ARCH), x86_64)
+	CFLAGS += -mavx2 -mfma -mbmi2
+else ifeq ($(ARCH), aarch64)
+	CFLAGS += -D__ARM_NEON__
+endif
 
 # to compile for debug: make DEBUG=1
 # to compile for no debug: make
@@ -20,8 +26,15 @@ all: $(LIB) $(EXEC)
 libcsv.a: csv.o
 	ar -rcs $@ $^
 
+csv2py: csv2py.c $(LIB)
 
-$(EXEC): $(LIB)
+csvsplit: csvsplit.c $(LIB)
+
+csvnorm: csvnorm.c $(LIB)
+
+csvstat: csvstat.c $(LIB)
+
+csvecho: csvecho.c $(LIB)
 
 format:
 	clang-format -i $(shell find . -name '*.[ch]')
