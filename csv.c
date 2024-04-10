@@ -11,65 +11,25 @@
   cktanx@gmail.com.
 */
 
-#define _XOPEN_SOURCE 700
 #include "csv.h"
-#include <stdlib.h>
-#include <string.h>
-#ifdef __ARM_NEON__
-#include <arm_neon.h>
-
-typedef int32x4_t __m128i;
-typedef char __v16qi __attribute__((vector_size(16)));
-
-typedef union __attribute__((aligned(16))) __oword {
-  int32x4_t m128i;
-  uint8_t u8[16];
-} __oword;
-
-static inline __m128i _mm_loadu_si128(const __m128i *p) {
-  __oword w;
-  if (((intptr_t)p) & 0xf) {
-    memcpy(&w.m128i, p, sizeof(*p));
-    p = &w.m128i;
-  }
-  return vld1q_s32((int32_t *)p);
-}
-
-static inline uint16_t SSE4_cmpestrm(int32x4_t S1, int L1, int32x4_t S2,
-                                     int L2) {
-  __oword s1, s2;
-  s1.m128i = S1;
-  s2.m128i = S2;
-  uint16_t result = 0;
-  uint16_t i = 0;
-  uint16_t j = 0;
-  for (i = 0; i < L2; i++) {
-    for (j = 0; j < L1; j++) {
-      if (s1.u8[j] == s2.u8[i]) {
-        result |= (1 << i);
-      }
-    }
-  }
-  return result;
-}
-
-#else
-#include <x86intrin.h>
-#endif
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <string.h>
+#include <x86intrin.h>
 
 #define likely(x) __builtin_expect((x), 1)
 #define unlikely(x) __builtin_expect((x), 0)
 
 typedef struct scan_t scan_t;
 struct scan_t {
-  uint16_t bmap;
+  uint32_t bmap;
   const char *base;
   const char *q;
-  __m128i match; /* qte, esc, delim, \n */
-  int matchlen;
+  char qte;
+  char esc;
+  char delim;
 };
 
 struct csv_parse_t {
@@ -101,57 +61,76 @@ struct csv_parse_t {
   scan_t scan;
 };
 
-static inline uint16_t fillbmap(const char *const p, const int plen,
-                                const __m128i match, const int matchlen) {
-  __m128i pval = _mm_loadu_si128((const __m128i *)p);
-#ifdef __ARM_NEON__
-  return SSE4_cmpestrm(match, matchlen, pval, plen);
-#else
-  __m128i mask = _mm_cmpestrm(match, matchlen, pval, plen,
-                              _SIDD_CMP_EQUAL_ANY | _SIDD_UBYTE_OPS);
-  return _mm_extract_epi16(mask, 0);
-#endif
+static inline uint32_t fillbmap(const __m256i *p, char qte, char esc,
+                                char delim) {
+  __m256i src = _mm256_loadu_si256(p);
+  __m256i pat0 = _mm256_set1_epi8(qte);
+  __m256i pat2 = _mm256_set1_epi8(delim);
+  __m256i pat3 = _mm256_set1_epi8('\n');
+
+  int32_t flag0 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(src, pat0));
+  int32_t flag1 = (esc == qte) ? 0 : _mm256_movemask_epi8(_mm256_cmpeq_epi8(
+                                         src, _mm256_set1_epi8(esc)));
+  int32_t flag2 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(src, pat2));
+  int32_t flag3 = _mm256_movemask_epi8(_mm256_cmpeq_epi8(src, pat3));
+
+  // return ntohl(flag0|flag1|flag2|flag3);
+  return flag0 | flag1 | flag2 | flag3;
 }
 
 /* setup the scan_t to scan p .. q */
-static void scan_reset(scan_t *sp, const char *p, const char *q) {
+static void scan_reset(scan_t *sp, const char *p, const char *q, char qte,
+                       char esc, char delim) {
+  char tmpbuf[32];
   sp->base = p;
   sp->q = q;
-  sp->bmap = fillbmap(p, q - p, sp->match, sp->matchlen);
+  sp->qte = qte;
+  sp->esc = esc;
+  sp->delim = delim;
+  int len = q - p;
+  if (len < 32) {
+    memcpy(tmpbuf, p, len);
+    p = tmpbuf;
+  }
+  sp->bmap = fillbmap((const __m256i *)p, sp->qte, sp->esc, sp->delim);
 }
 
 static int __scan_forward(scan_t *sp) {
   const char *base = sp->base;
-  const char *const q = sp->q;
-  char tmpbuf[16];
+  char tmpbuf[32];
+  const char *q = sp->q;
   while (0 == sp->bmap) {
-    base += 16;
+    base += 32;
     const char *p = base;
     const int plen = q - base;
-    if (unlikely(plen < 16)) {
-      if (unlikely(plen <= 0))
+    if (unlikely(plen < 32)) {
+      if (plen < 0) {
         return -1;
-      // We will load 16-byte in fillbmap. If there is
-      // less than 16-byte in base, copy into tmpbuf
+      }
+      // We will load 32-byte in fillbmap. If there is
+      // less than 32-byte in base, copy into tmpbuf
       // and read from tmpbuf.
       memcpy(tmpbuf, p, plen);
       p = tmpbuf;
     }
-    sp->bmap = fillbmap(p, plen, sp->match, sp->matchlen);
+    sp->bmap = fillbmap((const __m256i *)p, sp->qte, sp->esc, sp->delim);
   }
   sp->base = base;
   return 0;
 }
 
 /* this is the main workhorse. return ptr to the next special char */
-static inline const char *scan_next(scan_t *sp) {
-  if (0 == sp->bmap) {
-    if (__scan_forward(sp))
-      return 0;
+static inline __attribute__((always_inline)) const char *scan_next(scan_t *sp) {
+  const char *ret = 0;
+  if (0 == sp->bmap && __scan_forward(sp)) {
+    ;
+  } else {
+    int off = __builtin_ffs(sp->bmap) - 1;
+    sp->bmap &= ~(1 << off);
+    ret = sp->base + off;
+    ret = ret < sp->q ? ret : 0;
   }
-  int off = __builtin_ffs(sp->bmap) - 1;
-  sp->bmap &= ~(1 << off);
-  return sp->base + off;
+  return ret;
 }
 
 /* there are more fields than the current cp->fld[]. expand it. */
@@ -253,13 +232,14 @@ static void touchup(csv_parse_t *cp) {
   // remove the last \r in the last field
   if (top > 0) {
     char *p = cp->fld[top - 1];
-    if (!p) return;
-    char *q = p + cp->len[top - 1];
-    if (q - p > 0 && q[-1] == '\r') {
-      *--q = 0;
-      cp->len[top - 1] = q - p;
-      if (q - p == nullstrsz && 0 == memcmp(p, nullstr, nullstrsz)) {
-        cp->fld[top - 1] = 0; /* make it a nullptr to indicate sql NULL field */
+    if (p) {
+      char *q = p + cp->len[top - 1];
+      if (q - p > 0 && q[-1] == '\r') {
+        *--q = 0;
+        cp->len[top - 1] = q - p;
+        if (q - p == nullstrsz && 0 == memcmp(p, nullstr, nullstrsz)) {
+          cp->fld[top - 1] = 0; /* make it a nullptr to indicate sql NULL field */
+        }
       }
     }
   }
@@ -287,7 +267,7 @@ int csv_line(csv_parse_t *const cp, const char *buf, int bufsz) {
 
   const char **fld; /* points at cp->fld[cno] */
   scan_t *scan = &cp->scan;
-  scan_reset(scan, ppp, q);
+  scan_reset(scan, ppp, q, qte, esc, delim);
   int quoted = 0;
 
 STARTVAL : {
@@ -323,6 +303,7 @@ UNQUOTED : {
 }
 
 QUOTED : {
+
   quoted = 1;
   if (0 == (ppp = scan_next(scan)))
     return 0;
@@ -449,11 +430,6 @@ csv_parse_t *csv_open(int qte, int esc, int delim, const char nullstr[20]) {
   cp->qte = qte;
   cp->esc = esc;
   cp->delim = delim;
-
-  /* match while outside a quoted string field */
-  __v16qi v5 = {qte, esc, delim, '\n'};
-  cp->scan.match = (__m128i)v5;
-  cp->scan.matchlen = 5;
 
   return cp;
 }
