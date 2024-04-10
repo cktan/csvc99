@@ -19,4 +19,4 @@ clean:  # this is a NOOP
 format: # this is a NOOP
 
 wipe:
-	rm -rf bin include lib share $(CSVDIR) $(XRGDIR) $(JSONDIR) $(ARROWDIR)
+	rm -rf bin include lib share $(SIMDEDIR)
