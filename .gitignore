@@ -5,6 +5,10 @@
 /csvecho
 *~
 
+# Tests
+tests/out
+tests/out/*
+
 # Prerequisites
 *.d
 
