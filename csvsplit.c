@@ -43,12 +43,11 @@ static void prow(char *ptr, int len) {
   static int64_t nb = 0;
   static int64_t nr = 0;
 
-  int overflow = ((g_nbyte >= 0 && (nb == 0 || nb + len > g_nbyte)) ||
-                  (g_nrec >= 0 && (nr == 0 || nr + 1 > g_nrec)));
-  if (overflow) {
-    if (fp)
-      fclose(fp);
-    fp = 0;
+  if (fp && (g_nbyte > 0 && nb + len > g_nbyte) || (g_nrec > 0 && nr >= g_nrec)) {
+     fclose(fp);
+     fp = 0;
+     nb = 0;
+     nr = 0;
   }
 
   if (!fp) {
