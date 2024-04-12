@@ -152,7 +152,7 @@ int do_row(intptr_t handle, int64_t rownum, char **col, int ncol) {
   (void)rownum;
   for (int i = 0; i < ncol; i++) {
     char *s = col[i];
-    printf("%s'", i ? "," : "");
+    printf("%s", i ? "," : "");
     if (s) {
       /* search for dquote, comma, newline, or empty string */
       if (strpbrk(s, "\",\r\n") || *s == 0) {
@@ -166,6 +166,7 @@ int do_row(intptr_t handle, int64_t rownum, char **col, int ncol) {
     }
   }
 
+  printf("\r\n");
   return 0;
 }
 
