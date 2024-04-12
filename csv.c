@@ -17,7 +17,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <string.h>
+
+#ifdef __ARM_NEON__
+#include "simde/x86/sse2.h"
+#include "simde/x86/sse4.2.h"
+#include "simde/x86/avx2.h"
+#else
 #include <x86intrin.h>
+#endif
 
 #define likely(x) __builtin_expect((x), 1)
 #define unlikely(x) __builtin_expect((x), 0)

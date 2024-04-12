@@ -1,8 +1,14 @@
+ARCH = $(shell uname -m)
 CC = gcc-11
 CFILES = csv.c
 EXEC = csv2py csvsplit csvnorm csvstat csvecho t
 
-CFLAGS += -std=c99 -Wall -Wextra -mavx2 -mfma -mbmi2
+CFLAGS = -I ./ext/include -std=c99 -Wall -Wextra
+ifeq ($(ARCH), x86_64)
+	CFLAGS += -mavx2 -mfma -mbmi2
+else ifeq ($(ARCH), aarch64)
+	CFLAGS += -D__ARM_NEON__ -march=armv8-a+simd -DSIMDE_ENABLE_NATIVE_ALIASES
+endif
 
 # to compile for debug: make DEBUG=1
 # to compile for no debug: make
