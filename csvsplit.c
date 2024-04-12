@@ -146,8 +146,6 @@ void usage(int exitcode, const char *msg) {
   perr("\n");
   perr("    -h\n");
   perr("        print this help message\n");
-  perr("    -n ncol\n");
-  perr("        (mandatory) number of columns per record\n");
   perr("    -b nbytes\n");
   perr("        split into files of at most nbytes each (at least one "
        "record)\n");
@@ -160,7 +158,6 @@ void usage(int exitcode, const char *msg) {
 
 int main(int argc, char *argv[]) {
   int opt;
-  int ncol = 0;
 
   g_pname = argv[0];
   while ((opt = getopt(argc, argv, "hb:r:")) != -1) {
@@ -190,10 +187,6 @@ int main(int argc, char *argv[]) {
 
   if (g_nbyte > 0 && g_nrec > 0) {
     usage(1, "ERROR: specify only one of -b or -r options\n");
-  }
-
-  if (ncol <= 0) {
-    usage(1, "ERROR: must specify -n ncol option.\n");
   }
 
   FILE *fp = stdin;
