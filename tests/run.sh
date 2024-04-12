@@ -2,7 +2,7 @@
 
 mkdir -p out
 
-for i in csv2py-{1..10}.sh csvecho-{1..10}.sh ; do
+for i in csv2py-{1..10}.sh csvecho-{1..10}.sh csvnorm-{1..10}.sh; do
 	F=$i
 	if [ -f $F ]; then
 		echo $F
