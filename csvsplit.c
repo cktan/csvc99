@@ -43,12 +43,11 @@ static void prow(char *ptr, int len) {
   static int64_t nb = 0;
   static int64_t nr = 0;
 
-  int overflow = ((g_nbyte >= 0 && (nb == 0 || nb + len > g_nbyte)) ||
-                  (g_nrec >= 0 && (nr == 0 || nr + 1 > g_nrec)));
-  if (overflow) {
-    if (fp)
-      fclose(fp);
-    fp = 0;
+  if (fp && (g_nbyte > 0 && nb + len > g_nbyte) || (g_nrec > 0 && nr >= g_nrec)) {
+     fclose(fp);
+     fp = 0;
+     nb = 0;
+     nr = 0;
   }
 
   if (!fp) {
@@ -146,8 +145,6 @@ void usage(int exitcode, const char *msg) {
   perr("\n");
   perr("    -h\n");
   perr("        print this help message\n");
-  perr("    -n ncol\n");
-  perr("        (mandatory) number of columns per record\n");
   perr("    -b nbytes\n");
   perr("        split into files of at most nbytes each (at least one "
        "record)\n");
@@ -160,7 +157,6 @@ void usage(int exitcode, const char *msg) {
 
 int main(int argc, char *argv[]) {
   int opt;
-  int ncol = 0;
 
   g_pname = argv[0];
   while ((opt = getopt(argc, argv, "hb:r:")) != -1) {
@@ -190,10 +186,6 @@ int main(int argc, char *argv[]) {
 
   if (g_nbyte > 0 && g_nrec > 0) {
     usage(1, "ERROR: specify only one of -b or -r options\n");
-  }
-
-  if (ncol <= 0) {
-    usage(1, "ERROR: must specify -n ncol option.\n");
   }
 
   FILE *fp = stdin;
