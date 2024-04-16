@@ -43,7 +43,7 @@ static void prow(char *ptr, int len) {
   static int64_t nb = 0;
   static int64_t nr = 0;
 
-  if (fp && (g_nbyte > 0 && nb + len > g_nbyte) || (g_nrec > 0 && nr >= g_nrec)) {
+  if (fp && ((g_nbyte > 0 && nb + len > g_nbyte) || (g_nrec > 0 && nr >= g_nrec))) {
      fclose(fp);
      fp = 0;
      nb = 0;

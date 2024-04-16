@@ -1,0 +1,7 @@
+[
+	['name','age','city'],
+	['John',None,'New York'],
+	[None,'25','Los Angeles'],
+	['Jane','30',None]
+]
+

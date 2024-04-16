@@ -1,0 +1,6 @@
+      #bytes: 58
+       #rows: 3
+    #columns: 2 .. 5
+avg row size: 19
+min row size: 8
+max row size: 27
