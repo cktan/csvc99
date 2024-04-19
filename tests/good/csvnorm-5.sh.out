@@ -1,2 +1,8 @@
-John,,Boston
+John,NULL,Boston
+John,"",Boston
+John,'',Boston
+John,\N,Boston
+John,NULL,Boston
+John,"",Boston
+John,'',Boston
 John,NULL,Boston
