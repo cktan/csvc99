@@ -49,7 +49,7 @@ void usage(int exitcode, const char *msg) {
       -h         : print this message          \n\
       -q quote   : specify quote char; default to double-quote           \n\
       -e esc     : specify escape char; default to the quote char        \n\
-      -n nullstr : specify string representing null; default to \"\"     \n\
+      -n nullstr : specify string representing null;                     \n\
       \n\
     ");
   if (msg) {
@@ -128,10 +128,6 @@ void parse_cmdline(int argc, char *const *argv) {
 }
 
 void print_special(char *s) {
-  if (*s == 0) {
-    printf("NULL");
-    return;
-  }
   putchar('"');
   for (; *s; s++) {
     if (*s == '"') {
@@ -161,8 +157,7 @@ int do_row(intptr_t handle, int64_t rownum, char **col, int ncol) {
         printf("%s", s);
       }
     } else {
-      /* default null str is "" */
-      ;
+      printf("NULL");
     }
   }
 
