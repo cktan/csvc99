@@ -195,6 +195,13 @@ static void touchup(csv_parse_t *cp) {
     char *q = p + cp->len[i];
 
     *q = 0; /* NUL term */
+
+    /* check empty field */
+    if (cp->len[i] == 0) {
+      *fld = 0; /* make it a nullptr to indicate sql NULL field */
+      continue;
+    }
+
     if (q - p == nullstrsz && 0 == memcmp(p, nullstr, nullstrsz)) {
       *fld = 0; /* make it a nullptr to indicate sql NULL field */
       continue;
