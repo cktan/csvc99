@@ -1,4 +1,7 @@
 ARCH = $(shell uname -m)
+DIRS = ext
+BUILDDIRS = $(DIRS:%=build-%)
+
 CC = gcc-11
 CFILES = csv.c
 EXEC = csv2py csvsplit csvnorm csvstat csvecho t
@@ -21,7 +24,12 @@ endif
 
 LIB = libcsv.a
 
-all: $(LIB) $(EXEC)
+all: $(BUILDDIRS) $(LIB) $(EXEC)
+
+$(DIRS): $(BUILDDIRS)
+
+$(BUILDDIRS):
+	$(MAKE) -C $(@:build-%=%)
 
 libcsv.a: csv.o
 	ar -rcs $@ $^
