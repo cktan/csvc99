@@ -7,6 +7,13 @@ CFILES = csv.c
 EXEC = csv2py csvsplit csvnorm csvstat csvecho t
 
 CFLAGS = -I ./ext/include -std=c99 -Wall -Wextra
+
+ifeq ($(MARCH), )
+	CFLAGS += -march=tigerlake
+else
+	CFLAGS += -march=$(MARCH)
+endif
+
 ifeq ($(ARCH), x86_64)
 	CFLAGS += -mavx2 -mfma -mbmi2
 else ifeq ($(ARCH), aarch64)
