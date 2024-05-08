@@ -14,7 +14,6 @@ ifeq ($(ARCH), x86_64)
 	else
 		CFLAGS += -march=$(MARCH)
 	endif
-	CFLAGS += -mavx2 -mfma -mbmi2
 else ifeq ($(ARCH), aarch64)
 	CFLAGS += -D__ARM_NEON__ -march=armv8-a+simd -DSIMDE_ENABLE_NATIVE_ALIASES
 endif
