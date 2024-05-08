@@ -10,7 +10,7 @@ CFLAGS = -I ./ext/include -std=c99 -Wall -Wextra
 
 ifeq ($(ARCH), x86_64)
 	ifeq ($(MARCH), )
-		CFLAGS += -march=tigerlake
+		CFLAGS += -march=broadwell
 	else
 		CFLAGS += -march=$(MARCH)
 	endif
