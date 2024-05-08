@@ -8,13 +8,12 @@ EXEC = csv2py csvsplit csvnorm csvstat csvecho t
 
 CFLAGS = -I ./ext/include -std=c99 -Wall -Wextra
 
-ifeq ($(MARCH), )
-	CFLAGS += -march=tigerlake
-else
-	CFLAGS += -march=$(MARCH)
-endif
-
 ifeq ($(ARCH), x86_64)
+	ifeq ($(MARCH), )
+		CFLAGS += -march=tigerlake
+	else
+		CFLAGS += -march=$(MARCH)
+	endif
 	CFLAGS += -mavx2 -mfma -mbmi2
 else ifeq ($(ARCH), aarch64)
 	CFLAGS += -D__ARM_NEON__ -march=armv8-a+simd -DSIMDE_ENABLE_NATIVE_ALIASES
