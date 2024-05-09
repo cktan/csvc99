@@ -9,13 +9,12 @@ EXEC = csv2py csvsplit csvnorm csvstat csvecho t
 CFLAGS = -I ./ext/include -std=c99 -Wall -Wextra
 
 ifeq ($(ARCH), x86_64)
-	ifeq ($(MARCH), )
-		CFLAGS += -march=broadwell
-	else
-		CFLAGS += -march=$(MARCH)
-	endif
+	MARCH ?= broadwell
+	CFLAGS += -march=$(MARCH)
 else ifeq ($(ARCH), aarch64)
 	CFLAGS += -D__ARM_NEON__ -march=armv8-a+simd -DSIMDE_ENABLE_NATIVE_ALIASES
+else
+    $(error unsupported arch $(ARCH))
 endif
 
 # to compile for debug: make DEBUG=1
@@ -30,8 +29,6 @@ endif
 LIB = libcsv.a
 
 all: $(BUILDDIRS) $(LIB) $(EXEC)
-
-$(DIRS): $(BUILDDIRS)
 
 $(BUILDDIRS):
 	$(MAKE) -C $(@:build-%=%)
